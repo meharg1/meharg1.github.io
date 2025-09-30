@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project 2: Filters and Edges</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .section {
+            background-color: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 40px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            border-bottom: none;
+        }
+        h2 {
+            color: #444;
+            border-bottom: 2px solid #444;
+            padding-bottom: 10px;
+        }
+        h3 {
+            color: #555;
+            margin-top: 25px;
+        }
+        .image-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .image-item {
+            text-align: center;
+            max-width: 400px;
+        }
+        .image-item img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            min-width: 300px;
+        }
+        .code {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-family: monospace;
+            margin: 15px 0;
+        }
+        .math {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-left: 4px solid #007bff;
+            margin: 15px 0;
+            font-family: 'Times New Roman', serif;
+        }
+        .highlight {
+            background-color: #fff3cd;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+            margin: 15px 0;
+        }
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .comparison {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .comparison-item {
+            text-align: center;
+            flex: 1;
+            min-width: 200px;
+        }
+        .comparison-item img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .back-link {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .back-link:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-link">← Back to Portfolio</a>
+    
+    <h1>Project 2: Filters and Edges</h1>
+    
+    <div class="section">
+        <h2>Overview</h2>
+        <p>This project explores fundamental image processing techniques including convolution, edge detection, and multi-resolution blending. The project is divided into two main parts: <strong>Filters and Edges</strong> (Part 1) and <strong>Applications</strong> (Part 2), covering convolution implementation, edge detection methods, unsharp masking, hybrid images, and multi-resolution blending.</p>
+    </div>
+
+    <div class="section">
+        <h2>Part 1: Filters and Edges</h2>
+        
+        <h3>1.1 Convolution from Scratch</h3>
+        <p>I implemented 2D convolution three ways in NumPy only:</p>
+        <ul>
+            <li><strong>Four nested loops (conv2d_four_loops)</strong> – explicit multiply-accumulate</li>
+            <li><strong>Two loops (conv2d_two_loops)</strong> – same math, but uses a vectorized patch·kernel dot</li>
+            <li><strong>Comparison to SciPy</strong> (scipy.signal.convolve2d)</li>
+        </ul>
+        
+        <div class="highlight">
+            <h4>Boundary Handling</h4>
+            <p>I emulate SciPy's boundary='fill', fillvalue=0.0 by zero-padding:</p>
+            <ul>
+                <li><strong>same:</strong> pad by ⌊k/2⌋ so output has the same size as input</li>
+                <li><strong>full:</strong> pad by (k−1) so you see the entire sliding window support</li>
+                <li><strong>valid:</strong> no padding; only positions where the kernel fully overlaps the image</li>
+            </ul>
+        </div>
+        
+        <div class="math">
+            <h4>Correctness & Runtime</h4>
+            <p>The two-loop version matches SciPy to numerical precision (max |diff| is ~1e-12 on my images).</p>
+            <p><strong>Runtime:</strong> four-loop ≫ two-loop ≈ SciPy. Two-loop is much faster because inner multiplications are vectorized; SciPy is fastest due to optimized C/FFT backends.</p>
+        </div>
+
+        <h4>Complete Implementation</h4>
+        <div class="code">
+<pre><code>import numpy as np
+import matplotlib.pyplot as plt
+from PIL import Image
+import time, os
+
+def _flip_kernel(kernel: np.ndarray) -> np.ndarray:
+    return np.flipud(np.fliplr(kernel))
+
+def _pad_image(img: np.ndarray, pad_h: int, pad_w: int, pad_value: float = 0.0) -> np.ndarray:
+    H, W = img.shape
+    out = np.full((H + 2*pad_h, W + 2*pad_w), pad_value, dtype=np.float64)
+    out[pad_h:pad_h+H, pad_w:pad_w+W] = img
+    return out
+
+def conv2d_four_loops(img: np.ndarray, kernel: np.ndarray, mode: str = "same", pad_value: float = 0.0) -> np.ndarray:
+    assert img.ndim == 2 and kernel.ndim == 2
+    kH, kW = kernel.shape
+    k = _flip_kernel(kernel)
+    H, W = img.shape
+
+    if mode == "full":
+        pad_h, pad_w = kH - 1, kW - 1
+        out_H, out_W = H + kH - 1, W + kW - 1
+    elif mode == "same":
+        pad_h, pad_w = kH // 2, kW // 2
+        out_H, out_W = H, W
+    elif mode == "valid":
+        pad_h, pad_w = 0, 0
+        out_H, out_W = H - kH + 1, W - kW + 1
+        if out_H <= 0 or out_W <= 0:
+            raise ValueError("Kernel larger than image in 'valid' mode.")
+    else:
+        raise ValueError("mode must be one of {'full','same','valid'}")
+
+    img_p = _pad_image(img, pad_h, pad_w, pad_value)
+    out = np.zeros((out_H, out_W), dtype=np.float64)
+
+    for i in range(out_H):
+        for j in range(out_W):
+            acc = 0.0
+            for u in range(kH):
+                for v in range(kW):
+                    ii = i + u
+                    jj = j + v
+                    acc += img_p[ii, jj] * k[u, v]
+            out[i, j] = acc
+    return out
+
+def conv2d_two_loops(img: np.ndarray, kernel: np.ndarray, mode: str = "same", pad_value: float = 0.0) -> np.ndarray:
+    assert img.ndim == 2 and kernel.ndim == 2
+    kH, kW = kernel.shape
+    k = _flip_kernel(kernel)
+    H, W = img.shape
+
+    if mode == "full":
+        pad_h, pad_w = kH - 1, kW - 1
+        out_H, out_W = H + kH - 1, W + kW - 1
+    elif mode == "same":
+        pad_h, pad_w = kH // 2, kW // 2
+        out_H, out_W = H, W
+    elif mode == "valid":
+        pad_h, pad_w = 0, 0
+        out_H, out_W = H - kH + 1, W - kW + 1
+        if out_H <= 0 or out_W <= 0:
+            raise ValueError("Kernel larger than image in 'valid' mode.")
+    else:
+        raise ValueError("mode must be one of {'full','same','valid'}")
+
+    img_p = _pad_image(img, pad_h, pad_w, pad_value)
+    out = np.zeros((out_H, out_W), dtype=np.float64)
+
+    for i in range(out_H):
+        for j in range(out_W):
+            patch = img_p[i:i+kH, j:j+kW]
+            out[i, j] = np.sum(patch * k)
+    return out
+
+def box_filter(size: int = 9) -> np.ndarray:
+    assert size % 2 == 1, "Box size must be odd."
+    k = np.ones((size, size), dtype=np.float64)
+    return k / k.size
+
+def finite_diff_dx() -> np.ndarray:
+    return np.array([[-1.0, 1.0]], dtype=np.float64)
+
+def finite_diff_dy() -> np.ndarray:
+    return np.array([[-1.0], [1.0]], dtype=np.float64)
+
+def read_grayscale(path: str, max_dim: int = 800) -> np.ndarray:
+    from PIL import ImageOps
+    img = Image.open(path)
+    img = ImageOps.exif_transpose(img).convert("RGB")
+    w, h = img.size
+    scale = min(1.0, max_dim / max(w, h))
+    if scale < 1.0:
+        img = img.resize((int(w*scale), int(h*scale)), Image.Resampling.LANCZOS)
+    arr = np.asarray(img).astype(np.float64) / 255.0
+    gray = 0.299*arr[...,0] + 0.587*arr[...,1] + 0.114*arr[...,2]
+    return gray
+
+# Example usage and comparison
+IMG_PATH = "/Users/mehargulati/desktop/me.jpg"
+
+img = read_grayscale(IMG_PATH, max_dim=800)
+k_box = box_filter(9)
+Dx = finite_diff_dx()
+Dy = finite_diff_dy()
+
+t0 = time.time()
+img_box_four = conv2d_four_loops(img, k_box, mode="same", pad_value=0.0)
+t1 = time.time()
+img_box_two  = conv2d_two_loops(img, k_box, mode="same", pad_value=0.0)
+t2 = time.time()
+
+time_four = t1 - t0
+time_two  = t2 - t1
+
+Ix = conv2d_two_loops(img, Dx, mode="same", pad_value=0.0)
+Iy = conv2d_two_loops(img, Dy, mode="same", pad_value=0.0)
+grad_mag = np.sqrt(Ix**2 + Iy**2)
+
+max_abs_diff = None
+try:
+    from scipy.signal import convolve2d as sp_convolve2d
+    sp_out = sp_convolve2d(img, k_box, mode="same", boundary="fill", fillvalue=0)
+    max_abs_diff = np.abs(sp_out - img_box_two).max()
+    print(f"Max abs diff vs scipy.convolve2d: {max_abs_diff:.3e}")
+except Exception as e:
+    print("SciPy compare skipped:", str(e))
+
+print(f"Four-loop box conv time: {time_four:.3f} s")
+print(f"Two-loop  box conv time: {time_two:.3f} s")</code></pre>
+        </div>
+
+        <h4>Convolution Results</h4>
+        <div class="image-container">
+            <div class="image-item">
+                <img src="./media_proj2/basic con 1.png" alt="Basic Convolution 1">
+                <p><strong>Original Image</strong><br>Input grayscale image before convolution</p>
+            </div>
+            <div class="image-item">
+                <img src="./media_proj2/basic con 2.png" alt="Basic Convolution 2">
+                <p><strong>9×9 Box Blur Result</strong><br>Demonstrates the smoothing effect of our convolution implementation</p>
+            </div>
+        </div>
+        <p>These results show the effectiveness of our custom convolution implementation. The box filter creates a uniform blur by averaging neighboring pixels, demonstrating how our four-loop and two-loop implementations produce identical results to SciPy's optimized version.</p>
+
+        <h3>1.2 Finite Difference Operator</h3>
+        <p>I convolve with simple forward differences:</p>
+        <div class="math">
+            <p>Dx = [−1, 1], Dy = [−1, 1]ᵀ</p>
+            <p>to get Ix and Iy, then the gradient magnitude:</p>
+            <p>|∇I| = √(Ix² + Iy²)</p>
+        </div>
+        
+        <div class="highlight">
+            <h4>Binarized Edges</h4>
+            <p>I threshold |∇I| using percentiles (p70/p80/p90) and a fixed custom threshold (0.25·max).</p>
+            <p><strong>Trade-off:</strong> lower T finds more edges but admits more noise; higher T suppresses noise but breaks thin edges. I show p80 as a good middle ground on cameraman (keeps building/face contours while suppressing flat regions).</p>
+        </div>
+
+        <h4>Finite Difference Results</h4>
+        <div class="image-container">
+            <div class="image-item">
+                <img src="./media_proj2/cameraman 1.png" alt="Cameraman Finite Differences">
+                <p><strong>Cameraman Edge Detection</strong><br>Shows Ix, Iy, gradient magnitude, and binarized edges using finite difference operators</p>
+            </div>
+        </div>
+        <p>This demonstrates the finite difference approach to edge detection. The horizontal and vertical derivatives (Ix, Iy) capture edge orientations, while the gradient magnitude combines both to show edge strength. The binarized result shows how thresholding creates clean edge maps while filtering out noise.</p>
+
+        <h3>1.3 Derivative of Gaussian (DoG) vs. Finite Differences</h3>
+        <p><strong>Goal:</strong> Reduce noise before taking derivatives by replacing raw finite differences with Derivative-of-Gaussian (DoG) filters.</p>
+        
+        <div class="math">
+            <h4>How I built DoG:</h4>
+            <ol>
+                <li>Construct a 2D Gaussian with cv2.getGaussianKernel(ksize, σ), normalize it</li>
+                <li>Form DoG kernels by convolving the Gaussian with Dx and Dy: Kx = G * Dx, Ky = G * Dy</li>
+                <li>Either: Two-step: (I*G) then derivative (Dx/Dy), or One-step DoG: I * (GDx/GDy)</li>
+            </ol>
+            <p>They match up to numerical error (I report max absolute differences).</p>
+        </div>
+        
+        <div class="highlight">
+            <h4>Observations</h4>
+            <p>DoG (or "smooth-then-differentiate") produces cleaner edges with fewer spurious high-frequency responses than raw finite differences. Thresholded edge maps from the two pipelines look similar; DoG is less noisy and more continuous.</p>
+        </div>
+
+        <h4>DoG Filter Results</h4>
+        <div class="image-container">
+            <div class="image-item">
+                <img src="./media_proj2/cameraman 2.png" alt="Cameraman DoG Results">
+                <p><strong>DoG vs Finite Differences</strong><br>Comparison showing Gaussian kernel, DoG kernels, and cleaner edge detection results</p>
+            </div>
+        </div>
+        <p>The DoG approach demonstrates superior noise reduction compared to raw finite differences. By first applying Gaussian smoothing before differentiation, we reduce high-frequency noise while preserving important edge information. This results in cleaner, more continuous edge maps that better represent the underlying image structure.</p>
+    </div>
+
+    <div class="section">
+        <h2>Part 2: Applications</h2>
+        
+        <h3>2.1 Unsharp Mask (Image "Sharpening")</h3>
+        <p><strong>Idea:</strong> High frequencies = detail. A Gaussian low-pass gives B = I * G. The high-pass is H = I − B. Add some of H back:</p>
+        
+        <div class="math">
+            <p><strong>Unsharp masking:</strong> I_sharp = I + amount · (I − I*G)</p>
+        </div>
+        
+        <div class="highlight">
+            <h4>Single-convolution form</h4>
+            <p>This is equivalent to convolving once with K = (1+amount)·δ − amount·G and I verify it numerically (two-step vs single-kernel differ by ~1e-15).</p>
+        </div>
+        
+        <h4>Unsharp Masking Results</h4>
+        <div class="image-container">
+            <div class="image-item">
+                <img src="./media_proj2/taj mahal and camera man.png" alt="Taj Mahal and Cameraman Unsharp Masking">
+                <p><strong>Unsharp Masking Results</strong><br>Shows original, blurred, high-frequency, and sharpened versions with different amount values</p>
+            </div>
+        </div>
+        <p>These results demonstrate the unsharp masking process: the original image is blurred to create a low-pass version, the high-frequency component is extracted by subtraction, and then added back with controlled strength. The sharpening effect enhances edge details while the amount parameter controls the intensity. Higher values create more pronounced sharpening but can introduce halos around strong edges.</p>
+
+        <h3>2.2 Hybrid Images</h3>
+        <p><strong>Concept:</strong> Perception favors high frequencies up close and low frequencies from far away. Blend high-pass of one image with low-pass of another:</p>
+        
+        <div class="math">
+            <p><strong>Hybrid = α·HighPass(A; σ_high) + β·LowPass(B; σ_low)</strong></p>
+        </div>
+        
+        <div class="highlight">
+            <h4>Pipeline (with Derek + Nutmeg):</h4>
+            <ol>
+                <li>Alignment (translation, scale, small rotation) using 2 landmark pairs</li>
+                <li>Filtering: high-pass σ≈3 on Derek; low-pass σ≈8 on Nutmeg</li>
+                <li>Blend: α≈0.9, β≈1.0; clamp to [0,1]</li>
+                <li>Frequency analysis: I plot log-magnitude FFTs of A, B, the high-pass, low-pass, and the hybrid to show how bands combine</li>
+                <li>Pyramids: Gaussian/Laplacian stacks of the hybrid illustrate where energy sits across scales</li>
+            </ol>
+        </div>
+        
+        <h4>Hybrid Image Results</h4>
+        <div class="image-container">
+            <div class="image-item">
+                <img src="./media_proj2/catman hybrid.png" alt="Catman Hybrid Image">
+                <p><strong>Hybrid Image</strong><br>Final result combining high-frequency details from one image with low-frequency structure from another</p>
+            </div>
+            <div class="image-item">
+                <img src="./media_proj2/catman full.png" alt="Catman Full Process">
+                <p><strong>Full Process Visualization</strong><br>Shows the complete pipeline from alignment to frequency analysis</p>
+            </div>
+            <div class="image-item">
+                <img src="./media_proj2/catman frequency domain analysis.png" alt="Catman Frequency Analysis">
+                <p><strong>Frequency Domain Analysis</strong><br>Log-magnitude FFTs showing how frequency bands combine in the hybrid</p>
+            </div>
+        </div>
+        <p>These results demonstrate the hybrid image creation process. The frequency domain analysis shows how high and low frequency components are combined, while the full process visualization illustrates the alignment and filtering steps. The final hybrid image changes appearance based on viewing distance - showing high-frequency details up close and low-frequency structure from far away.</p>
+
+        <h3>2.3 Gaussian & Laplacian Stacks (no downsampling)</h3>
+        <p><strong>Stacks vs. pyramids:</strong> Pyramids downsample; stacks keep full resolution and just increase blur per level. I build:</p>
+        
+        <div class="math">
+            <ul>
+                <li><strong>Gaussian stack:</strong> G₀ = I, Gᵢ = Gᵢ₋₁ * G(σ)</li>
+                <li><strong>Laplacian stack:</strong> Lᵢ = Gᵢ − Gᵢ₊₁ (band-pass), with Lₙ₋₁ = Gₙ₋₁</li>
+            </ul>
+        </div>
+        
+        <div class="highlight">
+            <h4>Orange + Apple (Figure 3.42 recreation):</h4>
+            <ol>
+                <li>I create a cosine-ramp mask (vertical seam) and a Gaussian stack of the mask</li>
+                <li>At each level: L_blendᵢ = Mᵢ·L_Aᵢ + (1−Mᵢ)·L_Bᵢ, then sum over i and add the coarsest level</li>
+                <li>I show panels (a)–(l): A×M, B×(1−M), their sum for high/medium/low levels, and the final blended apple–orange</li>
+            </ol>
+            <p><strong>Takeaway:</strong> Blurring the mask per scale is what removes seams; that's why stacks/pyramids are powerful for blending.</p>
+        </div>
+
+        <h4>Gaussian & Laplacian Stack Results</h4>
+        <div class="image-container">
+            <div class="image-item">
+                <img src="./media_proj2/apple orange 1.png" alt="Apple Orange Stack 1">
+                <p><strong>Gaussian Stack Levels</strong><br>Shows different blur levels of the mask and images for multi-resolution blending</p>
+            </div>
+            <div class="image-item">
+                <img src="./media_proj2/apple orange 2.png" alt="Apple Orange Stack 2">
+                <p><strong>Laplacian Stack Blending</strong><br>Demonstrates how band-pass components are blended at each scale</p>
+            </div>
+        </div>
+        <p>These results show the multi-resolution blending process using Gaussian and Laplacian stacks. The key insight is that by blurring the mask at each scale and blending the corresponding frequency bands, we achieve seamless transitions between the two images. The vertical seam becomes invisible because the blending occurs at multiple frequency scales simultaneously.</p>
+
+        <h3>2.4 Multi-resolution Blending (custom images + irregular mask)</h3>
+        
+        <div class="highlight">
+            <h4>Vertical/horizontal seam:</h4>
+            <p>Repeats 2.3 with a straight step mask (smoothed per level). Works when content lines up.</p>
+        </div>
+        
+        <div class="highlight">
+            <h4>Irregular mask (Figure 8-style):</h4>
+            <ol>
+                <li>I build a content-aware mask automatically: estimate foregrounds with a light background threshold, compute distance transforms to each object, set mask M = dA/(dA+dB), then Gaussian-smooth it</li>
+                <li>Build Gaussian/Laplacian stacks for A, B, and M; blend per level and reconstruct</li>
+            </ol>
+            <p><strong>Why this helps:</strong> Straight seams fail on clean backgrounds (you blend background with background). The distance-based mask routes the seam through object interiors where textures transition gradually, so the multi-resolution blend hides the boundary.</p>
+        </div>
+
+        <h4>Multi-resolution Blending Results</h4>
+        <div class="image-container">
+            <div class="image-item">
+                <img src="./media_proj2/banana corn 1.png" alt="Banana Corn Blend 1">
+                <p><strong>Original Images</strong><br>Source images for multi-resolution blending with irregular mask</p>
+            </div>
+            <div class="image-item">
+                <img src="./media_proj2/banana corn 2.png" alt="Banana Corn Blend 2">
+                <p><strong>Irregular Mask Process</strong><br>Shows the content-aware mask generation and distance transform approach</p>
+            </div>
+            <div class="image-item">
+                <img src="./media_proj2/banana corn 3.png" alt="Banana Corn Blend 3">
+                <p><strong>Final Blended Result</strong><br>Seamless multi-resolution blend using irregular mask and Gaussian/Laplacian stacks</p>
+            </div>
+        </div>
+        <p>These results demonstrate the power of irregular masks for multi-resolution blending. Unlike straight-line seams, the content-aware mask follows object boundaries and routes transitions through areas where textures change gradually. Combined with the multi-resolution approach, this creates completely seamless blends that are impossible to detect, even in challenging scenarios with complex backgrounds and foreground objects.</p>
+    </div>
+
+    <div class="section">
+        <h2>Most Important Thing I Learned</h2>
+        <div class="highlight">
+            <p><strong>Multi-resolution thinking changes everything:</strong> once you blur the mask per scale and blend band-pass components instead of raw pixels, seams virtually disappear and edits look natural. The core trick—operate in frequency/scale space, not just in image space—is what powers sharpening, hybrid images, and seamless compositing across this whole project.</p>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Technical Implementation Details</h2>
+        <h3>Key Algorithms Used:</h3>
+        <ul>
+            <li><strong>Convolution:</strong> Custom NumPy implementations with boundary handling</li>
+            <li><strong>Edge Detection:</strong> Finite differences and Derivative-of-Gaussian filters</li>
+            <li><strong>Unsharp Masking:</strong> High-frequency enhancement through Gaussian blur subtraction</li>
+            <li><strong>Hybrid Images:</strong> Frequency-domain blending for perceptual effects</li>
+            <li><strong>Multi-resolution Blending:</strong> Gaussian and Laplacian stacks for seamless compositing</li>
+        </ul>
+        
+        <h3>Performance Considerations:</h3>
+        <ul>
+            <li>Vectorized operations for efficient convolution</li>
+            <li>Pyramid-based processing for large images</li>
+            <li>Optimized boundary handling to minimize artifacts</li>
+            <li>Careful parameter tuning for different image types</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>Results Summary</h2>
+        <p>This project successfully demonstrates the power of multi-resolution image processing techniques. Key achievements include:</p>
+        <ul>
+            <li>Robust edge detection using both finite differences and DoG filters</li>
+            <li>Effective image sharpening through unsharp masking</li>
+            <li>Convincing hybrid images that change appearance with viewing distance</li>
+            <li>Seamless multi-resolution blending with both regular and irregular masks</li>
+        </ul>
+        <p>The techniques learned here form the foundation for many advanced computer vision and image processing applications.</p>
+    </div>
+
+</body>
+</html>
