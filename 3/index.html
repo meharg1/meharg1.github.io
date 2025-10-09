@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project 3: Image Mosaicing</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .section {
+            background-color: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 40px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            border-bottom: none;
+        }
+        h2 {
+            color: #444;
+            border-bottom: 2px solid #444;
+            padding-bottom: 10px;
+        }
+        h3 {
+            color: #555;
+            margin-top: 25px;
+        }
+        .image-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .image-item {
+            text-align: center;
+            max-width: 600px;
+        }
+        .image-item img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            min-width: 600px;
+        }
+        .back-link {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .back-link:hover {
+            background-color: #0056b3;
+        }
+        .highlight {
+            background-color: #fff3cd;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-link">← Back to Portfolio</a>
+    
+    <h1>Project 3: Image Mosaicing</h1>
+    
+    <div class="section">
+        <h2>A.1: Shoot and Digitize Pictures</h2>
+        <p>I captured a living-room pair (IMG_7552 and IMG_7553) from a fixed position and rotated the camera to the right by roughly 30–40 degrees. The scene uses a normal phone lens with straight lines staying straight, so distortion is minimal. The two photos were taken seconds apart, so lighting and content are consistent. The overlap is about 50–60 percent and includes the window frame, sofa, coffee table, and the LED corner, which provide many crisp corners for correspondences. The geometry is projective since the camera pivoted around one center of projection while viewing mostly planar walls and floor.</p>
+        
+        <div style="display: flex; justify-content: center; align-items: center; gap: 20px; flex-wrap: nowrap;">
+            <div style="text-align: center; max-width: 150px;">
+                <img src="./media/IMG_7552.jpg" alt="Image 1: Living Room View" style="max-width: 150px; height: auto;">
+                <p><strong>Image 1</strong></p>
+            </div>
+            <div style="text-align: center; max-width: 150px;">
+                <img src="./media/IMG_7553.jpg" alt="Image 2: Living Room View" style="max-width: 150px; height: auto;">
+                <p><strong>Image 2</strong></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>A.2: Recover Homographies</h2>
+        <p>I recovered the planar projective transform between the two images. I clicked 6 corresponding corners using a mouse interface and stored them as im1_pts and im2_pts in pixel coordinates. I then solved for the 3×3 homography H using the DLT setup Ah=0 with SVD and normalized H so H₃₃=1. For each match (x,y)→(x′,y′) I added the two linear equations [−x,−y,−1,0,0,0,xx′,yx′,x′] and [0,0,0,−x,−y,−1,xy′,yy′,y′] into A. Using more than four points gives an overdetermined system and the SVD solution gives the least-squares estimate. I fixed iPhone orientation on load, visualized the clicked points on both images, and printed the recovered matrix. This meets the deliverables: implemented computeH(im1_pts, im2_pts), showed the correspondences on the images, stated the linear system used, and reported the resulting homography.</p>
+        
+        <div class="image-container">
+            <div class="image-item">
+                <img src="./media/Figure_4.png" alt="Figure: Homography Recovery">
+                <p><strong>Figure: Homography Recovery</strong><br>Shows the point correspondences and recovered homography matrix</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>A.3: Warp the Images</h2>
+        <p>I implemented inverse warping with two interpolators. For an output pixel (xₒ,yₒ) I map it back to the source using H⁻¹ to get (xₛ,yₛ). Nearest neighbor rounds (xₛ,yₛ) to the closest integer and copies that pixel. Bilinear computes the weighted average of the four neighbors using the fractional parts of (xₛ,yₛ). I set the output canvas by projecting the four source corners through H to get the bounding box, and I treat pixels without valid samples as empty via a mask (these show as black outside the warped footprint). I use the center-of-pixel convention. Results: nearest neighbor is very fast but shows jagged edges on lines and high-contrast details; bilinear is slower but produces smoother edges and fewer aliasing artifacts. For rectification I clicked the four inner corners of the window frame and mapped them to a square {(0,0),(1,0),(0,1),(1,1)} to produce a fronto-parallel, rectangular view; I repeated the same process on the coffee-table top. This satisfies the requirements: two functions (warpImageNearestNeighbor, warpImageBilinear) using inverse warping, comparison of quality vs speed, correct output sizing, handling of empty pixels, and two rectified results.</p>
+        
+        <div class="image-container">
+            <div class="image-item">
+                <img src="./media/Figure_5.png" alt="Figure: Image Warping">
+                <p><strong>Figure: Image Warping</strong><br>Shows the warping results and rectification examples</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>A.4: Blend Images into a Mosaic</h2>
+        <p>I created a two-image mosaic by fixing Image 1 as the reference and warping Image 2 into its coordinates using the homography. I first computed a joint output canvas by projecting both images' corners and taking the union bounds. I generated per-image alpha maps that are 1 near the center and decay toward the edges, and I also formed a valid-pixel mask from the warped Image 2 footprint. I accumulated both images into the canvas with weighted averaging (image × alpha) and accumulated alpha weights, then divided by the total weights to composite. I finally cropped to the nonempty region. The figure shows both sources, the warped Image 2, and the feathered mosaic. This reduces hard seams and ghosting in the overlap. To reach three mosaics I repeat the same procedure by swapping the reference (warp Image 1 into Image 2) and by applying the pipeline to a second captured pair.</p>
+        
+        <div class="image-container">
+            <div class="image-item">
+                <img src="./media/Figure_7.png" alt="Figure 7: Image Mosaicing">
+                <p><strong>Figure: Image Mosaicing</strong><br>Shows the mosaic creation process and final results</p>
+            </div>
+        </div>
+    </div>
+
+
+</body>
+</html>
